@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>432 Hz Converter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
+      background: #0c0c0c;
+      color: #cccccc;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .terminal {
+      background: #1a1a2e;
+      border: 1px solid #333;
+      border-radius: 6px;
+      width: 100%;
+      max-width: 580px;
+      overflow: hidden;
+    }
+
+    .titlebar {
+      background: #16213e;
+      padding: 0.5rem 1rem;
+      font-size: 0.75rem;
+      color: #555;
+      border-bottom: 1px solid #333;
+    }
+
+    .body {
+      padding: 1.25rem 1.5rem;
+      font-size: 0.88rem;
+      line-height: 1.7;
+    }
+
+    /* ── Horizontal rules ── */
+    .sep {
+      color: #444;
+      margin: 0.2rem 0;
+      user-select: none;
+    }
+
+    /* ── Header block ── */
+    .header-line {
+      color: #eee;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .info-line { color: #888; }
+    .info-line .val { color: #ccc; }
+
+    /* ── Status lines ── */
+    .ok   { color: #3d9970; }
+    .err  { color: #e74c3c; }
+    .warn { color: #d4a017; }
+
+    .dim { color: #555; }
+
+    /* ── Device selector ── */
+    .section-title {
+      color: #aaa;
+      margin-top: 1rem;
+      margin-bottom: 0.4rem;
+    }
+
+    #device-select {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+      background: #0f0f1e;
+      color: #ccc;
+      border: 1px solid #444;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 0.3rem 0;
+    }
+    #device-select:focus { outline: 1px solid #3d9970; }
+    #device-select:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Buttons ── */
+    .btn-row {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    button {
+      flex: 1;
+      padding: 0.55rem 1rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+      border: 1px solid #444;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    #btn-start {
+      background: #1a3a2a;
+      color: #3d9970;
+      border-color: #3d9970;
+    }
+    #btn-start:not(:disabled):hover { background: #2a4a3a; }
+
+    #btn-stop {
+      background: #3a1a1a;
+      color: #e74c3c;
+      border-color: #e74c3c;
+    }
+    #btn-stop:not(:disabled):hover { background: #4a2a2a; }
+
+    /* ── Streaming section ── */
+    .streaming-block {
+      margin-top: 0.75rem;
+    }
+
+    .streaming-block .header-line {
+      color: #3d9970;
+    }
+
+    /* ── Error display ── */
+    .error-block {
+      display: none;
+      margin-top: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: #2c1a1a;
+      border: 1px solid #5c2a2a;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    /* ── Blink cursor ── */
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 1em;
+      background: #ccc;
+      animation: blink 1s step-end infinite;
+      vertical-align: text-bottom;
+      margin-left: 2px;
+    }
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    /* ── Pulse dot ── */
+    .pulse-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3d9970;
+      animation: dotpulse 1.5s infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes dotpulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body>
+<div class="terminal">
+  <div class="titlebar">432hz — WASAPI</div>
+  <div class="body">
+
+    <!-- ═══ Header ═══ -->
+    <div class="sep">===============================================</div>
+    <div class="header-line">🎵  432 Hz Real-Time Converter  (WASAPI)</div>
+    <div class="sep">===============================================</div>
+    <div class="info-line">  Pitch ratio : <span class="val">{{ ratio }}  (432/440)</span></div>
+    <div class="info-line">  Block size  : <span class="val">{{ chunk_size }} samples</span></div>
+    <div class="info-line">  Ring buffer : <span class="val">{{ ring_size }} samples ({{ ring_secs }}s)</span></div>
+
+    <br>
+
+    <!-- ═══ Input device (auto-detected, not selectable) ═══ -->
+    {% if device_info.cable_found %}
+    <div class="ok">✅  Input  [{{ device_info.input_device_id }}]: {{ device_info.input_device_name }}</div>
+    {% else %}
+    <div class="err">❌  Could not auto-detect 'CABLE Output' on WASAPI.</div>
+    <div class="warn" style="margin-top:0.3rem;">    Install VB-Cable and route your app to output via CABLE Input.</div>
+    {% endif %}
+
+    <!-- ═══ Output device selection ═══ -->
+    <div class="section-title">Available WASAPI output devices:</div>
+    <div class="sep">-----------------------------------------------</div>
+
+    {% if device_info.output_devices %}
+    <select id="device-select">
+      {% for dev in device_info.output_devices %}
+      <option value="{{ dev.id }}">[{{ dev.id }}] {{ dev.name }}</option>
+      {% endfor %}
+    </select>
+    {% else %}
+    <div class="err" style="padding:0.3rem 0;">  No WASAPI output devices found.</div>
+    {% endif %}
+
+    <div class="sep">-----------------------------------------------</div>
+    <div class="dim" id="prompt-line">  Select your Headphones/Speakers, then press Start.<span class="cursor"></span></div>
+
+    <!-- ═══ Start / Stop ═══ -->
+    <div class="btn-row">
+      <button id="btn-start" {% if not device_info.cable_found or not device_info.output_devices %}disabled{% endif %}>▶  Start Streaming</button>
+      <button id="btn-stop" disabled>■  Stop</button>
+    </div>
+
+    <!-- ═══ Error display ═══ -->
+    <div class="error-block" id="error-block">
+      <div class="err" id="error-text"></div>
+    </div>
+
+    <!-- ═══ Streaming info (shown when running) ═══ -->
+    <div class="streaming-block" id="streaming-block" style="display:none;">
+      <br>
+      <div class="ok" id="out-line">✅  Output: —</div>
+      <div class="info-line" id="sr-line">    Sample rate : —</div>
+      <div class="info-line" id="ch-line">    Channels    : —</div>
+      <br>
+      <div class="sep">===============================================</div>
+      <div class="streaming-block"><div class="header-line"><span class="pulse-dot"></span>Streaming — play music in Spotify now.</div></div>
+      <div class="sep">===============================================</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Elements ──
+  const selectEl    = document.getElementById("device-select");
+  const btnStart    = document.getElementById("btn-start");
+  const btnStop     = document.getElementById("btn-stop");
+  const promptLine  = document.getElementById("prompt-line");
+  const errorBlock  = document.getElementById("error-block");
+  const errorText   = document.getElementById("error-text");
+  const streamBlock = document.getElementById("streaming-block");
+
+  function getSelectedId() {
+    if (!selectEl) return null;
+    return parseInt(selectEl.value, 10);
+  }
+
+  function getCsrf() {
+    return document.cookie.split("; ")
+      .find(r => r.startsWith("csrftoken="))?.split("=")[1] ?? "";
+  }
+
+  function showError(msg) {
+    if (msg) {
+      errorText.textContent = "❌  " + msg;
+      errorBlock.style.display = "block";
+    } else {
+      errorBlock.style.display = "none";
+    }
+  }
+
+  function applyStatus(s) {
+    if (s.running) {
+      btnStart.disabled = true;
+      btnStop.disabled  = false;
+      promptLine.style.display  = "none";
+      streamBlock.style.display = "block";
+      if (selectEl) selectEl.disabled = true;
+
+      document.getElementById("out-line").textContent = "✅  Output: " + (s.output_device || "—");
+      document.getElementById("sr-line").textContent  = "    Sample rate : " + (s.sample_rate ? s.sample_rate + " Hz" : "—");
+      document.getElementById("ch-line").textContent  = "    Channels    : " + (s.channels ?? "—");
+    } else {
+      btnStart.disabled = false;
+      btnStop.disabled  = true;
+      promptLine.style.display  = "block";
+      streamBlock.style.display = "none";
+      if (selectEl) selectEl.disabled = false;
+
+      if (s.error) showError(s.error);
+    }
+  }
+
+  async function pollStatus() {
+    try {
+      const res = await fetch("/api/status/");
+      if (res.ok) applyStatus(await res.json());
+    } catch (_) {}
+  }
+
+  btnStart.addEventListener("click", async () => {
+    const selectedId = getSelectedId();
+    if (selectedId === null || isNaN(selectedId)) return;
+    btnStart.disabled = true;
+    showError(null);
+    try {
+      const res = await fetch("/api/start/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrf() },
+        body: JSON.stringify({ output_device_id: selectedId }),
+      });
+      const data = await res.json();
+      if (!data.ok) showError(data.error);
+      await pollStatus();
+    } catch (e) {
+      showError(String(e));
+      btnStart.disabled = false;
+    }
+  });
+
+  btnStop.addEventListener("click", async () => {
+    btnStop.disabled = true;
+    try {
+      const res = await fetch("/api/stop/", {
+        method: "POST",
+        headers: { "X-CSRFToken": getCsrf() },
+      });
+      const data = await res.json();
+      if (!data.ok) showError(data.error);
+      else showError(null);
+      await pollStatus();
+    } catch (e) {
+      showError(String(e));
+    }
+  });
+
+  setInterval(pollStatus, 2000);
+  pollStatus();
+</script>
+</body>
+</html>
